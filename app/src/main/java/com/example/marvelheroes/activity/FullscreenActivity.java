@@ -1,89 +1,58 @@
 package com.example.marvelheroes.activity;
 
-import android.annotation.SuppressLint;
-
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
 import android.os.Handler;
-import android.view.MotionEvent;
+import android.util.Log;
 import android.view.View;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.TextView;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.bumptech.glide.Glide;
+import com.example.marvelheroes.Entity.Hero;
+import com.example.marvelheroes.Entity.HeroesList;
 import com.example.marvelheroes.R;
+import com.example.marvelheroes.retrofit.RetrofitInitializer;
 
-/**
- * An example full-screen activity that shows and hides the system UI (i.e.
- * status bar and navigation/system bar) with user interaction.
- */
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 public class FullscreenActivity extends AppCompatActivity {
-    /**
-     * Whether or not the system UI should be auto-hidden after
-     * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
-     */
-    private static final boolean AUTO_HIDE = true;
-
-    /**
-     * If {@link #AUTO_HIDE} is set, the number of milliseconds to wait after
-     * user interaction before hiding the system UI.
-     */
-    private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
-
-    /**
-     * Some older devices needs a small delay between UI widget updates
-     * and a change of the status and navigation bar.
-     */
-    private static final int UI_ANIMATION_DELAY = 300;
+    private int index = 0;
     private final Handler mHideHandler = new Handler();
-    private View mContentView;
-    private final Runnable mHidePart2Runnable = new Runnable() {
-        @SuppressLint("InlinedApi")
-        @Override
-        public void run() {
-            // Delayed removal of status and navigation bar
+    private List<Hero> heroes;
+    private ImageButton back;
+    private ImageButton next;
+    private Button more;
+    private TextView description;
+    private long ts = System.currentTimeMillis();
+    private String apiKey = "c71f10135daeca3c815e16b209ba0e78";
+    private String privateKey = "e54bbb11d8c2048e1d4a44a78c753b08bf57e0d2";
 
-            // Note that some of these constants are new as of API 16 (Jelly Bean)
-            // and API 19 (KitKat). It is safe to use them, as they are inlined
-            // at compile-time and do nothing on earlier devices.
-            mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
-        }
-    };
-    private View mControlsView;
     private final Runnable mShowPart2Runnable = new Runnable() {
         @Override
         public void run() {
-            // Delayed display of UI elements
+
             ActionBar actionBar = getSupportActionBar();
             if (actionBar != null) {
                 actionBar.show();
             }
-            mControlsView.setVisibility(View.VISIBLE);
         }
     };
-    private boolean mVisible;
     private final Runnable mHideRunnable = new Runnable() {
         @Override
         public void run() {
             hide();
-        }
-    };
-    /**
-     * Touch listener to use for in-layout UI controls to delay hiding the
-     * system UI. This is to prevent the jarring behavior of controls going away
-     * while interacting with activity UI.
-     */
-    private final View.OnTouchListener mDelayHideTouchListener = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View view, MotionEvent motionEvent) {
-            if (AUTO_HIDE) {
-                delayedHide(AUTO_HIDE_DELAY_MILLIS);
-            }
-            return false;
         }
     };
 
@@ -93,75 +62,127 @@ public class FullscreenActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_fullscreen);
 
-        mVisible = true;
-        mControlsView = findViewById(R.id.fullscreen_content_controls);
-        mContentView = findViewById(R.id.fullscreen_content);
+        getInfo();
 
+        back = findViewById(R.id.back);
+        next = findViewById(R.id.next);
+        more = findViewById(R.id.more);
+        description = findViewById(R.id.description);
 
-        // Set up the user interaction to manually show or hide the system UI.
-        mContentView.setOnClickListener(new View.OnClickListener() {
+        back.setVisibility(View.INVISIBLE);
+
+        back.setOnClickListener(new View.OnClickListener(){
             @Override
-            public void onClick(View view) {
-                toggle();
+            public void onClick(View v){
+                index--;
+                description.setVisibility(View.INVISIBLE);
+                more.setVisibility(View.VISIBLE);
+                setVisibilityButtons();
+                setLayout();
             }
         });
-
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
-        findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+        next.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View v){
+                index++;
+                description.setVisibility(View.INVISIBLE);
+                more.setVisibility(View.VISIBLE);
+                setVisibilityButtons();
+                setLayout();
+            }
+        });
+        more.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                description.setVisibility(View.VISIBLE);
+                more.setVisibility(View.INVISIBLE);
+            }
+        });
     }
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
 
-        // Trigger the initial hide() shortly after the activity has been
-        // created, to briefly hint to the user that UI controls
-        // are available.
         delayedHide(100);
     }
 
-    private void toggle() {
-        if (mVisible) {
-            hide();
-        } else {
-            show();
-        }
-    }
-
     private void hide() {
-        // Hide UI first
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {
             actionBar.hide();
         }
-        mControlsView.setVisibility(View.GONE);
-        mVisible = false;
 
-        // Schedule a runnable to remove the status and navigation bar after a delay
         mHideHandler.removeCallbacks(mShowPart2Runnable);
-        mHideHandler.postDelayed(mHidePart2Runnable, UI_ANIMATION_DELAY);
     }
 
-    @SuppressLint("InlinedApi")
-    private void show() {
-        // Show the system bar
-        mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        mVisible = true;
-
-        // Schedule a runnable to display UI elements after a delay
-        mHideHandler.removeCallbacks(mHidePart2Runnable);
-        mHideHandler.postDelayed(mShowPart2Runnable, UI_ANIMATION_DELAY);
-    }
-
-    /**
-     * Schedules a call to hide() in delay milliseconds, canceling any
-     * previously scheduled calls.
-     */
     private void delayedHide(int delayMillis) {
         mHideHandler.removeCallbacks(mHideRunnable);
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
+    }
+
+    public void getInfo(){
+        heroes = new ArrayList<>();
+        Call<HeroesList> call = new RetrofitInitializer().getHeroes().listar(ts, apiKey, hashMD5());
+        call.enqueue(new Callback<HeroesList>() {
+            @Override
+            public void onResponse(Call<HeroesList> call, Response<HeroesList> response) {
+                heroes = response.body().getData().getResults();
+                setLayout();
+            }
+
+            @Override
+            public void onFailure(Call<HeroesList> call, Throwable t) {
+                Log.e("Lista de Heróis", "Erro ao listar os heróis.");
+            }
+        });
+    }
+
+    public void setLayout(){
+        ImageView image = findViewById(R.id.image);
+        String path = heroes.get(index).getThumbnail().getPath() + "/landscape_large." + heroes.get(index).getThumbnail().getExtension();
+        Glide.with(this).load(path).placeholder(R.drawable.ic_placeholder).into(image);
+
+        TextView name = findViewById(R.id.name);
+        name.setText(heroes.get(index).getName());
+
+        description.setText(heroes.get(index).getDescription());
+    }
+
+    public void setVisibilityButtons(){
+        if(index == 0){
+            back.setVisibility(View.INVISIBLE);
+            next.setVisibility(View.VISIBLE);
+        }else if(index == heroes.size() -1){
+            back.setVisibility(View.VISIBLE);
+            next.setVisibility(View.INVISIBLE);
+        }else{
+            back.setVisibility(View.VISIBLE);
+            next.setVisibility(View.VISIBLE);
+        }
+    }
+
+    public String hashMD5(){
+        String s = ts + privateKey + apiKey;
+        final String MD5 = "MD5";
+        try {
+            MessageDigest digest = java.security.MessageDigest
+                    .getInstance(MD5);
+            digest.update(s.getBytes());
+            byte messageDigest[] = digest.digest();
+
+            StringBuilder hexString = new StringBuilder();
+            for (byte aMessageDigest : messageDigest) {
+                String h = Integer.toHexString(0xFF & aMessageDigest);
+                while (h.length() < 2)
+                    h = "0" + h;
+                hexString.append(h);
+            }
+            return hexString.toString();
+
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return "";
     }
 }
